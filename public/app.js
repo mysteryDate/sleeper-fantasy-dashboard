@@ -1,6 +1,9 @@
 const username = 'glammerGrrl666';
 let currentSeason = 2025;
 
+const NUM_TRANSACTED_PLAYERS = 10;
+const NUM_LOPSIDED_TRADES = 10;
+
 // Live reload in development
 if (window.location.hostname === 'localhost') {
     const evtSource = new EventSource('/events');
@@ -175,7 +178,8 @@ function displayLeagues(leagueDetails, playersData, statsData) {
         // Sort players by transaction count
         const topPlayers = Object.entries(playerTransactions)
             .sort((a, b) => b[1] - a[1])
-            .slice(0, 10)
+            .filter(([playerId, count]) => playersData[playerId].position != "DEF")
+            .slice(0, NUM_TRANSACTED_PLAYERS)
             .map(([playerId, count]) => {
                 const player = playersData[playerId] || {};
                 return {
@@ -234,10 +238,12 @@ function displayLeagues(leagueDetails, playersData, statsData) {
                     }
 
                     const medianScore = weeklyScores.length > 0 ? median(weeklyScores) : 0;
+                    const totalScore = weeklyScores.length > 0 ? total(weeklyScores) : 0;
 
                     sides[rosterId].adds.push({
                         name: player.full_name || `Player ${playerId}`,
                         position: player.position || 'N/A',
+                        totalScore: totalScore,
                         medianScore: medianScore,
                         gamesPlayed: weeklyScores.length
                     });
@@ -270,8 +276,11 @@ function displayLeagues(leagueDetails, playersData, statsData) {
 
         // Sort by lopsidedness and get top 5
         const lopsidedTrades = analyzedTrades
+            .filter((a) => {
+              return a.sides[0].adds.length != 0 && a.sides[1].adds.length != 0 && a.lopsidedness != 0
+            })
             .sort((a, b) => b.lopsidedness - a.lopsidedness)
-            .slice(0, 5);
+            .slice(0, NUM_LOPSIDED_TRADES);
 
         html += `
             <div class="league-card">
@@ -392,7 +401,7 @@ function displayLeagues(leagueDetails, playersData, statsData) {
                         <div class="section-title players">Most Transacted Players</div>
                         <div class="transaction-grid">
                             <div class="transaction-card">
-                                ${topPlayers.slice(0, 5).map(player => `
+                                ${topPlayers.slice(0, NUM_TRANSACTED_PLAYERS / 2).map(player => `
                                     <div class="player-item">
                                         <div class="player-info">
                                             <div class="player-name">${player.name}</div>
@@ -404,7 +413,7 @@ function displayLeagues(leagueDetails, playersData, statsData) {
                             </div>
                             ${topPlayers.length > 5 ? `
                                 <div class="transaction-card">
-                                    ${topPlayers.slice(5, 10).map(player => `
+                                    ${topPlayers.slice(NUM_TRANSACTED_PLAYERS / 2, NUM_TRANSACTED_PLAYERS).map(player => `
                                         <div class="player-item">
                                             <div class="player-info">
                                                 <div class="player-name">${player.name}</div>
@@ -431,6 +440,12 @@ function median(values) {
     const sorted = values.slice().sort((a, b) => a - b);
     const mid = Math.floor(sorted.length / 2);
     return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
+function total(values) {
+  if (values.length === 0) return 0;
+  const sum = values.reduce((accumulator, currentValue) => accumulator + currentValue, 0);
+  return sum;
 }
 
 // Fetch data on load
